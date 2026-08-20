@@ -59,7 +59,6 @@ var dangerousCommands = []struct {
 	{"wget |bash", "Piped web download to shell"},
 	{"curl |bash", "Piped web download to shell"},
 	{"eval ", "Dynamic code evaluation"},
-	{"ls ", "Test ls Command"},
 }
 
 // isCompoundCommand 判断命令是否为复合命令：含顶层 &&、||、;、|、&、换行、
@@ -382,10 +381,10 @@ func (bt *BashTool) Execute(ctx context.Context, toolUseContext core_type.ToolUs
 	}
 
 	// ── 超时 ──
-	var timedOut bool
+	var timedOut atomic.Bool
 	if timeoutSec > 0 {
 		time.AfterFunc(time.Duration(timeoutSec)*time.Millisecond, func() {
-			timedOut = true
+			timedOut.Store(true)
 			if cmd.Process != nil {
 				cmd.Process.Kill()
 			}
@@ -436,8 +435,8 @@ func (bt *BashTool) Execute(ctx context.Context, toolUseContext core_type.ToolUs
 	output.Finish()
 
 	// ── 超时错误 ──
-	if timedOut {
-		errMsg := fmt.Sprintf("Error: command timed out after %ds", timeoutSec)
+	if timedOut.Load() {
+		errMsg := fmt.Sprintf("Error: command timed out after %.2fs", float64(timeoutSec)/1000)
 		emitProgress(toolUseContext, errMsg)
 		return bt.ErrorReturn(toolCall, fmt.Errorf("bash: %s", errMsg))
 	}

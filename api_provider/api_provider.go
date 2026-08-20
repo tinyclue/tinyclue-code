@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/tinyclue/tinyclue-code/api_provider/types"
@@ -158,6 +159,8 @@ func (c *Client) ChatStream(ctx context.Context, req *types.ChatRequest) *types.
 // 全局默认 Client
 // =============================================================
 
+// defaultClientMu 保护 defaultClient 的并发读写（GetClient 读取、UpdateFromConfig 写入）。
+var defaultClientMu sync.RWMutex
 var defaultClient *Client
 
 func init() {
@@ -171,6 +174,8 @@ func init() {
 
 // GetClient 返回全局默认 Client。调用方应注意 nil 检查。
 func GetClient() *Client {
+	defaultClientMu.RLock()
+	defer defaultClientMu.RUnlock()
 	return defaultClient
 }
 
@@ -180,7 +185,9 @@ func UpdateFromConfig() error {
 	if err != nil {
 		return err
 	}
+	defaultClientMu.Lock()
 	defaultClient = c
+	defaultClientMu.Unlock()
 	return nil
 }
 

@@ -73,16 +73,22 @@ func (as *AgentSession) buildCompactionEntry(compactionContext *core_types.Compa
 }
 
 func (as *AgentSession) AppendMessage(message types.Message) *core_types.MessageEntry {
+	as.mu.Lock()
 	entry := as.buildMessageEntry(message)
 	as.entrys = append(as.entrys, entry)
+	as.mu.Unlock()
+
 	as.appendToFile(entry)
 	return entry
 }
 
 func (as *AgentSession) AppendRespMessage(message types.Message, error types.Error) *core_types.MessageEntry {
+	as.mu.Lock()
 	entry := as.buildMessageEntry(message)
 	entry.Error = error
 	as.entrys = append(as.entrys, entry)
+	as.mu.Unlock()
+
 	as.appendToFile(entry)
 	return entry
 }
@@ -96,8 +102,11 @@ func (as *AgentSession) getCurrentEntryId() string {
 }
 
 func (as *AgentSession) AppendCompaction(compactionContext *core_types.CompactionContext) {
+	as.mu.Lock()
 	entry := as.buildCompactionEntry(compactionContext)
 	as.entrys = append(as.entrys, entry)
+	as.mu.Unlock()
+
 	as.appendToFile(entry)
 }
 
@@ -169,7 +178,9 @@ func (as *AgentSession) generateId() string {
 
 // GetConversationEntryPath 正向遍历全部会话条目，返回 MessageEntry + CompactionEntry 列表。
 func (as *AgentSession) GetConversationEntryPath() []core_types.SessionEntry {
+	as.mu.Lock()
 	path := as.buildEntryPath(as.entrys)
+	as.mu.Unlock()
 	var result []core_types.SessionEntry
 	for _, e := range path {
 		switch e.(type) {

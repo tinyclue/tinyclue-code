@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 )
 
 // =============================================================
@@ -46,6 +47,7 @@ func (a *Auth) MarshalJSON() ([]byte, error) {
 
 // Config 聚合所有配置。
 type Config struct {
+	mu       sync.RWMutex // 保护 settings / auth 的并发读写（热更新与读取分处不同 goroutine）
 	settings Settings
 	auth     Auth
 	dir      string // 配置目录路径
@@ -71,6 +73,8 @@ func init() {
 
 // Reload 从磁盘重新加载 settings 和 auth（用于测试或热更新）。
 func (c *Config) Reload() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if err := c.loadSettings(); err != nil {
 		return err
 	}
@@ -104,25 +108,35 @@ func ConfigDir() (string, error) {
 
 // DefaultProvider 返回 settings.json 中配置的默认厂商名称。
 func (c *Config) DefaultProvider() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.settings.DefaultProvider
 }
 
 // DefaultModel 返回 settings.json 中配置的默认模型名称。
 func (c *Config) DefaultModel() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.settings.DefaultModel
 }
 
 func (c *Config) Language() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.settings.Language
 }
 
 func (c *Config) AutoMemory() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.settings.AutoMemory
 }
 
 // ReasoningEffort 返回 settings.json 中配置的推理级别。
 // 未配置时默认返回 "high"。
 func (c *Config) ReasoningEffort() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if c.settings.ReasoningEffort == "" {
 		return "high"
 	}
@@ -131,6 +145,8 @@ func (c *Config) ReasoningEffort() string {
 
 // SetReasoningEffort 设置推理级别并保存到 settings.json。
 func (c *Config) SetReasoningEffort(effort string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.settings.ReasoningEffort = effort
 	return c.saveSettings()
 }
@@ -148,6 +164,8 @@ func (c *Config) saveSettings() error {
 // AuthFor 返回指定厂商的 API Key，如未配置则返回空。
 // oauth 标记（Type=="oauth"、空 Key）也算已配置，此时返回 ("", true)。
 func (c *Config) AuthFor(provider string) (key string, ok bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if c.auth.Entries == nil {
 		return "", false
 	}
@@ -163,6 +181,8 @@ func (c *Config) AuthFor(provider string) (key string, ok bool) {
 
 // AuthTypeFor 返回指定厂商的鉴权方式（entry.Type："api-key"/"oauth"），未配置返回 ""。
 func (c *Config) AuthTypeFor(provider string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if c.auth.Entries == nil {
 		return ""
 	}
@@ -175,6 +195,8 @@ func (c *Config) AuthTypeFor(provider string) string {
 
 // ProviderNames 返回所有已配置了 auth 的厂商列表（api-key 或 oauth 标记均算已配置）。
 func (c *Config) ProviderNames() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	var names []string
 	for name, entry := range c.auth.Entries {
 		if entry != nil && (entry.Key != "" || entry.Type == "oauth") {
@@ -187,6 +209,8 @@ func (c *Config) ProviderNames() []string {
 
 // SetDefaults 设置默认厂商和模型并保存到 settings.json。
 func (c *Config) SetDefaults(provider, model string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.settings.DefaultProvider = provider
 	c.settings.DefaultModel = model
 	return c.saveSettings()
@@ -195,6 +219,8 @@ func (c *Config) SetDefaults(provider, model string) error {
 // SetAuth 设置指定厂商的授权信息并保存到 auth.json。
 // 厂商已存在则更新，不存在则追加。同时更新内存缓存。
 func (c *Config) SetAuth(provider string, entry *AuthEntry) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.auth.Entries == nil {
 		c.auth.Entries = make(map[string]*AuthEntry)
 	}

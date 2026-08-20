@@ -131,12 +131,12 @@ func (al *AgentLoop) buildChatRequest(agentUseContext *core_types.AgentUseContex
 
 func (al *AgentLoop) withRetryRequest(signal *AgentSignal, agentUseContext *core_types.AgentUseContext) (*apitypes.ChatResponse, error) {
 	maxRetries := 10
-	contextWindow := api_provider.GetClient().Adapter().ContextWindow()
 	client := api_provider.GetClient()
 	if client == nil {
 		log.Errorf(signal.Ctx(), "agent_loop: GetClient() returned nil")
 		return nil, fmt.Errorf("api provider not initialized")
 	}
+	contextWindow := api_provider.GetClient().Adapter().ContextWindow()
 	var finalResp *apitypes.ChatResponse
 	for attempt := 1; attempt < maxRetries+1; attempt++ {
 		if attempt > 1 {

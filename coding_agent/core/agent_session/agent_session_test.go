@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/tinyclue/tinyclue-code/api_provider/types"
 	core_types "github.com/tinyclue/tinyclue-code/coding_agent/core/types"
 )
 
@@ -46,6 +48,40 @@ func writeSessionFile(t *testing.T, dir string, sessionId string, seq int) strin
 		t.Fatalf("write session file: %v", err)
 	}
 	return path
+}
+
+// TestConcurrentAppendReadNoRace 并发 AppendMessage/AppendRespMessage 与读取会话条目，
+// 验证 entrys slice 的写写、读写无数据竞争（配合 go test -race 生效）。
+// file==nil 时 appendToFile 为空操作，无需真实会话文件。
+func TestConcurrentAppendReadNoRace(t *testing.T) {
+	as := &AgentSession{}
+	const n = 50
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			as.AppendMessage(types.UserMessage{Role: types.UserRole, Text: "hi", CreatedAt: time.Now()})
+		}()
+		go func() {
+			defer wg.Done()
+			as.AppendRespMessage(types.UserMessage{Role: types.UserRole, Text: "resp", CreatedAt: time.Now()}, types.Error{})
+		}()
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			as.GetConversationEntryPath()
+		}()
+		go func() {
+			defer wg.Done()
+			as.GetEntrysPath()
+			as.GetLastPlanEntry()
+		}()
+	}
+	wg.Wait()
+	if len(as.entrys) != 2*n {
+		t.Fatalf("expected %d entries, got %d", 2*n, len(as.entrys))
+	}
 }
 
 // TestSanitizePath 验证路径→目录名映射、超长截断+hash、确定性。

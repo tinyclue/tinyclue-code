@@ -17,6 +17,7 @@ import (
 	"github.com/tinyclue/tinyclue-code/tui/component/welcome"
 	"github.com/tinyclue/tinyclue-code/tui/core"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -35,7 +36,11 @@ type Interactive struct {
 	agentInteractive    *AgentInteractive
 	defaultFooter       *footer.FooterComponent
 
-	permissionQueue []PermissionQueueItem // 权限请求队列，支持多个 agent 同时弹窗
+	// permissionQueue 权限请求队列，支持多个 agent 同时弹窗。
+	// 入队来自 TuiEvent 订阅协程（handlePermissionDialog），出队来自 UI 事件循环协程
+	// （closePermissionDialog），跨协程访问需持 permissionMu。
+	permissionQueue []PermissionQueueItem
+	permissionMu    sync.Mutex
 }
 
 // New 创建一个新的 Interactive 实例。

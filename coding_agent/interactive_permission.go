@@ -18,25 +18,32 @@ type PermissionQueueItem struct {
 }
 
 // handlePermissionDialog 收到新的权限请求：创建面板 → 入队 → 尝试展示。
+// 可能运行在 TuiEvent 订阅协程上，与 UI 协程的 closePermissionDialog 并发访问队列，需持锁。
 func (ia *Interactive) handlePermissionDialog(req core_types.PermissionRequest) {
 	panelComp := ia.createPermissionPanelByTool(req)
 	if panelComp == nil {
 		return
 	}
+	ia.permissionMu.Lock()
 	ia.permissionQueue = append(ia.permissionQueue, PermissionQueueItem{req, panelComp})
+	ia.permissionMu.Unlock()
 	ia.tryShowNextPanel()
 }
 
 // closePermissionDialog 关闭当前权限面板（由按钮回调调用）：出队 → 尝试展示下一个。
 func (ia *Interactive) closePermissionDialog() {
+	ia.permissionMu.Lock()
 	if len(ia.permissionQueue) > 0 {
 		ia.permissionQueue = ia.permissionQueue[1:]
 	}
+	ia.permissionMu.Unlock()
 	ia.tryShowNextPanel()
 }
 
 // tryShowNextPanel 队列有剩余就展示队首，队列为空就隐藏面板容器恢复编辑区。
 func (ia *Interactive) tryShowNextPanel() {
+	ia.permissionMu.Lock()
+	defer ia.permissionMu.Unlock()
 	if len(ia.permissionQueue) > 0 {
 		ia.activatePanel(ia.permissionQueue[0].panelComp)
 	} else {

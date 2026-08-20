@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
 )
@@ -144,38 +145,136 @@ func restoreLineEndings(text string, ending string) string {
 //   - Unicode 破折号 → ASCII 连字符
 //   - 特殊空格 → 普通空格
 func normalizeForFuzzyMatch(text string) string {
-	// NFKC
-	text = norm.NFKC.String(text)
+	s, _ := normalizeForFuzzyMatchWithMap(text)
+	return s
+}
 
-	// 行尾去空白
-	lines := strings.Split(text, "\n")
-	for i, line := range lines {
-		lines[i] = strings.TrimRight(line, " \t\r")
+// normalizeForFuzzyMatchWithMap 同 normalizeForFuzzyMatch，同时返回字节偏移映射
+// origIndex：origIndex[i] 为归一化后第 i 个字节在原始 text 中的起始字节偏移，
+// origIndex[len(normalized)] == len(text)。该映射用于把模糊匹配命中的位置映射回原始
+// 文本，从而只替换命中区间、保持文件其余字节原样（避免整文件被有损归一化重写）。
+func normalizeForFuzzyMatchWithMap(text string) (normalized string, origIndex []int) {
+	// ── 第 1 阶段：NFKC。按段（起始符 + 后续组合符）处理——组合只发生在段内，
+	// 逐段归一化与整体归一化结果一致，且能记录每段输出的源偏移。
+	nfkc, mapNFKC := nfkcWithMap(text)
+
+	// ── 第 2 阶段：清除每行末尾空白。
+	trimmed, mapTrim := trimLineEndsWithMap(nfkc)
+
+	// ── 第 3 阶段：逐字符替换 Unicode 等价物。
+	var b strings.Builder
+	b.Grow(len(trimmed))
+	mapRep := make([]int, 0, len(trimmed)+1)
+	for i := 0; i < len(trimmed); {
+		r, size := utf8.DecodeRuneInString(trimmed[i:])
+		out := string(fuzzyReplaceRune(r))
+		for k := 0; k < len(out); k++ {
+			b.WriteByte(out[k])
+			mapRep = append(mapRep, i)
+		}
+		i += size
 	}
-	text = strings.Join(lines, "\n")
+	mapRep = append(mapRep, len(trimmed))
 
-	// 逐字符替换 Unicode 等价物
+	// ── 合成最终映射：归一化字节 j → 替换后位置 → 裁剪后位置 → nfkc 位置 → 原始 text 位置。
+	normalized = b.String()
+	origIndex = make([]int, len(normalized)+1)
+	for j := 0; j <= len(normalized); j++ {
+		origIndex[j] = mapNFKC[mapTrim[mapRep[j]]]
+	}
+	return normalized, origIndex
+}
+
+// nfkcWithMap 对 text 做 NFKC 归一化，返回结果及其到 text 的字节偏移映射 mapNFKC：
+// mapNFKC[i] 为归一化后第 i 个字节在 text 中的起始偏移，mapNFKC[len(nfkc)] == len(text)。
+// 归一化对段（起始符 + 后续组合符）的输出是常数偏移的阶跃函数，因此每个输出字节记一次
+// 源偏移即可，末尾补一个最终边界。
+func nfkcWithMap(text string) (nfkc string, mapNFKC []int) {
 	var b strings.Builder
 	b.Grow(len(text))
-	for _, r := range text {
-		switch {
-		case r == '\u2018' || r == '\u2019' || r == '\u201A' || r == '\u201B':
-			b.WriteRune('\'')
-		case r == '\u201C' || r == '\u201D' || r == '\u201E' || r == '\u201F':
-			b.WriteRune('"')
-		case r == '\u2010' || r == '\u2011' || r == '\u2012' || r == '\u2013' || r == '\u2014' || r == '\u2015' || r == '\u2212':
-			b.WriteRune('-')
-		case r == '\u00A0':
-			b.WriteRune(' ')
-		case r >= '\u2002' && r <= '\u200A':
-			b.WriteRune(' ')
-		case r == '\u202F' || r == '\u205F' || r == '\u3000':
-			b.WriteRune(' ')
-		default:
-			b.WriteRune(r)
+	mapNFKC = make([]int, 0, len(text)+1)
+
+	for i := 0; i < len(text); {
+		segStart := i
+		_, size := utf8.DecodeRuneInString(text[i:])
+		i += size
+		// 吞掉后续组合标记（ccc != 0）；组合只发生在段内，段边界即组合边界。
+		for i < len(text) {
+			r2, size2 := utf8.DecodeRuneInString(text[i:])
+			if isCombiningStarterBoundary(r2) {
+				break
+			}
+			i += size2
+		}
+		seg := text[segStart:i]
+		nf := norm.NFKC.String(seg)
+		for k := 0; k < len(nf); k++ {
+			mapNFKC = append(mapNFKC, segStart)
+			b.WriteByte(nf[k])
 		}
 	}
-	return b.String()
+	nfkc = b.String()
+	mapNFKC = append(mapNFKC, len(text))
+	return nfkc, mapNFKC
+}
+
+// trimLineEndsWithMap 去掉每行末尾空白（空格/tab/回车），返回结果及其到 nfkc 的偏移
+// 映射 mapTrim：mapTrim[i] 为裁剪后第 i 个字节在 nfkc 中的偏移。
+func trimLineEndsWithMap(nfkc string) (string, []int) {
+	var b strings.Builder
+	b.Grow(len(nfkc))
+	mapTrim := make([]int, 0, len(nfkc)+1)
+
+	for start := 0; start <= len(nfkc); {
+		nl := strings.IndexByte(nfkc[start:], '\n')
+		lineEnd := len(nfkc)
+		if nl != -1 {
+			lineEnd = start + nl
+		}
+		line := nfkc[start:lineEnd]
+		trimmed := strings.TrimRight(line, " \t\r")
+		// TrimRight 只去掉尾部字节，trimmed 是 line 的前缀，前缀字节偏移保持不变。
+		for k := 0; k < len(trimmed); k++ {
+			b.WriteByte(trimmed[k])
+			mapTrim = append(mapTrim, start+k)
+		}
+		if nl == -1 {
+			break
+		}
+		b.WriteByte('\n')
+		mapTrim = append(mapTrim, lineEnd)
+		start = lineEnd + 1
+	}
+	mapTrim = append(mapTrim, len(nfkc))
+	return b.String(), mapTrim
+}
+
+// isCombiningStarterBoundary 判断 rune 是否为组合边界起始符（ccc == 0），即其不应与
+// 前一个起始符发生规范组合。用栈上缓冲避免按 rune 分配字符串。
+func isCombiningStarterBoundary(r rune) bool {
+	var b [utf8.UTFMax]byte
+	n := utf8.EncodeRune(b[:], r)
+	return norm.NFKC.Properties(b[:n]).CCC() == 0
+}
+
+// fuzzyReplaceRune 返回 rune 的 ASCII 等价替换；无对应替换时返回原值。
+func fuzzyReplaceRune(r rune) rune {
+	switch {
+	case r == '\u2018' || r == '\u2019' || r == '\u201A' || r == '\u201B':
+		return '\''
+	case r == '\u201C' || r == '\u201D' || r == '\u201E' || r == '\u201F':
+		return '"'
+	case r == '\u2010' || r == '\u2011' || r == '\u2012' || r == '\u2013' || r == '\u2014' || r == '\u2015' || r == '\u2212':
+		return '-'
+	case r == '\u00A0':
+		return ' '
+	case r >= '\u2002' && r <= '\u200A':
+		return ' '
+	case r == '\u202F' || r == '\u205F' || r == '\u3000':
+		return ' '
+	default:
+		return r
+	}
 }
 
 // ─────────────────────────────────────────────
@@ -290,13 +389,16 @@ func applyEditsToNormalizedContent(normalizedContent string, edits []editOp, pat
 		}
 	}
 
-	// 4. 如果任意一个 edit 需要模糊匹配，整个 baseContent 切换到模糊归一化空间
+	// 4. 若任意一个 edit 需要模糊匹配，构建模糊归一化空间用于定位命中位置，并记录到原始
+	//    空间的偏移映射；最终拼装回到原始空间，避免未触碰的区域被整文件模糊重写（NFKC /
+	//    行尾去空白 / 引号破折号替换均为有损操作）。
 	baseContent := normalizedContent
+	var baseMap []int // 模糊空间字节偏移 → normalizedContent 字节偏移（anyFuzzy 时非 nil）
 	if anyFuzzy {
-		baseContent = normalizeForFuzzyMatch(normalizedContent)
+		baseContent, baseMap = normalizeForFuzzyMatchWithMap(normalizedContent)
 	}
 
-	// 5. 二次匹配 + 唯一性校验
+	// 5. 二次匹配 + 唯一性校验（命中位置在 baseContent 所在空间）
 	matched := make([]matchedEdit, 0, len(normalizedEdits))
 	for i, e := range normalizedEdits {
 		mr := fuzzyFindText(baseContent, e.OldText)
@@ -332,19 +434,25 @@ func applyEditsToNormalizedContent(normalizedContent string, edits []editOp, pat
 		}
 	}
 
-	// 7. 逆序拼装（防止位置偏移）
-	newContent := baseContent
+	// 7. 逆序拼装（防止位置偏移）。命中位置在模糊空间时，先映射回原始空间再替换，
+	//    未触碰的区域保持字节原样。
+	newContent := normalizedContent
 	for i := len(matched) - 1; i >= 0; i-- {
 		edit := matched[i]
-		newContent = newContent[:edit.matchIndex] + edit.newText + newContent[edit.matchIndex+edit.matchLength:]
+		start, end := edit.matchIndex, edit.matchIndex+edit.matchLength
+		if anyFuzzy {
+			start = baseMap[edit.matchIndex]
+			end = baseMap[edit.matchIndex+edit.matchLength]
+		}
+		newContent = newContent[:start] + edit.newText + newContent[end:]
 	}
 
 	// 8. 无变更检查
-	if baseContent == newContent {
+	if normalizedContent == newContent {
 		return appliedEditsResult{}, noChangeError(path, len(normalizedEdits))
 	}
 
-	return appliedEditsResult{baseContent: baseContent, newContent: newContent}, nil
+	return appliedEditsResult{baseContent: normalizedContent, newContent: newContent}, nil
 }
 
 // ─────────────────────────────────────────────
