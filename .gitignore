@@ -30,4 +30,3 @@ bin/
 .tinyclue/sessions
 .tinyclue/tasks
 .tinyclue/config/settings.local.json
-.tinyclue/caches
