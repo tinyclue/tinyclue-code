@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "toy-demo": {
+      "command": "~/data/release/tinyclue-code/bin/tinyclue-test-mcp"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["--yes", "@playwright/mcp@latest", "--browser", "chrome", "--user-data-dir", "~/.tinyclue/playwright-profile", "--output-dir", "~/.tinyclue/playwright-output"],
+      "env": { "MCP_TIMEOUT": "120s" },
+      "_note": "方案A：用本机 Google Chrome（--browser chrome）+ 持久 profile（--user-data-dir）；--output-dir 把截图/快照/console 日志写到项目外，避免污染仓库。路径用 ~ 表示主目录，由配置加载器展开（config/mcp.go expandPath），避免在仓库里暴露个人绝对路径。原配置 args 为 [\"--yes\", \"@playwright/mcp@latest\"]（内置 Chromium），去掉 --browser / --user-data-dir 即回退。"
+    },
+    "deepwiki": {
+      "type": "http",
+      "url": "https://mcp.deepwiki.com/mcp",
+      "_note": "无鉴权 http server：启动即连接（200 + 工具列表），用于测试无授权直连路径。"
+    },
+    "stripe": {
+      "type": "http",
+      "url": "https://mcp.stripe.com",
+      "_note": "需 OAuth 授权：401 + WWW-Authenticate Bearer 挑战进 needs-auth；/mcp 按 [a] 走完整 OAuth（浏览器登录 Stripe 账号）。端点即根路径。"
+    },
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp"
+    }
+  }
+}

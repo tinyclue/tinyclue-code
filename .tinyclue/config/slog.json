@@ -1,0 +1,8 @@
+{
+  "enable": true,
+  "log_path": "/tmp",
+  "file_name": "tinyclue.log",
+  "max_size": 104857600,
+  "backups": 7,
+  "level": "info"
+}
