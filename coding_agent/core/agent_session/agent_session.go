@@ -8,10 +8,8 @@ import (
 	core_types "github.com/tinyclue/tinyclue-code/coding_agent/core/types"
 	"github.com/tinyclue/tinyclue-code/coding_agent/core/utils"
 	"github.com/tinyclue/tinyclue-code/config"
-	"hash/fnv"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -405,24 +403,6 @@ func (as *AgentSession) initSubDir() {
 	as.initDir()
 	as.sessionDir = filepath.Join(as.sessionDir, "sub")
 	os.MkdirAll(as.sessionDir, 0755)
-}
-
-// （如 /a b/c → -a-b-c），得到确定性的项目目录名。
-var pathSanitizer = regexp.MustCompile(`[^a-zA-Z0-9]`)
-
-// maxSanitizedLength 超长路径截断阈值
-const maxSanitizedLength = 200
-
-// sanitizePath 把任意路径映射成项目目录名：非字母数字逐字符替换为 '-'；
-// 结果超长（>maxSanitizedLength）截断并拼 fnv64a hash 尾巴，保证确定性。
-func sanitizePath(s string) string {
-	out := pathSanitizer.ReplaceAllString(s, "-")
-	if len(out) <= maxSanitizedLength {
-		return out
-	}
-	h := fnv.New64a()
-	h.Write([]byte(s))
-	return out[:maxSanitizedLength] + "-" + strconv.FormatUint(h.Sum64(), 16)
 }
 
 // InitLatest 恢复会话：恢复当前项目目录（projects/<sanitized-cwd>）内最近会话；

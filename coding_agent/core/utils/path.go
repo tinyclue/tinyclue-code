@@ -11,11 +11,20 @@ import (
 
 const maxSanitizedLength = 200
 
-// sanitizePath sanitizes a path component for use as a directory name.
+// SanitizePath sanitizes a path component for use as a directory name.
 // Mirrors TS sanitizePath() in sessionStoragePortable.ts.
+//
+// 去掉开头的 "-"（来自绝对路径的前导 /），让目录名更干净：
+//   - /Users/foo → -Users-foo → Users-foo
+//
+// 但根目录 "/" sanitize 后就是 "-"，去掉就空了 → 保留，兜底不为空，
+// 避免项目目录退化成 <home>/projects/ 本身（与所有项目撞名）。
 func SanitizePath(name string) string {
 	re := regexp.MustCompile(`[^a-zA-Z0-9]`)
 	sanitized := re.ReplaceAllString(name, "-")
+	if len(sanitized) > 1 {
+		sanitized = strings.TrimPrefix(sanitized, "-")
+	}
 	if len(sanitized) <= maxSanitizedLength {
 		return sanitized
 	}

@@ -315,6 +315,23 @@ func TestSanitizePath_Long(t *testing.T) {
 	}
 }
 
+// TestSanitizePath_StripsLeadingDash 验证绝对路径 sanitize 后开头的 "-"
+// （来自前导 /）被去掉：/Users/foo → Users-foo。
+func TestSanitizePath_StripsLeadingDash(t *testing.T) {
+	result := utils.SanitizePath("/Users/foo/my-project")
+	if result != "Users-foo-my-project" {
+		t.Fatalf("unexpected: %s", result)
+	}
+}
+
+// TestSanitizePath_Root 验证根目录 "/" sanitize 成 "-" 后不会被去成空串，
+// 项目目录永不退化成 <home>/projects/ 本身。
+func TestSanitizePath_Root(t *testing.T) {
+	if got := utils.SanitizePath("/"); got == "" {
+		t.Fatal("root path must not produce empty dir name")
+	}
+}
+
 func TestNormalizePathForComparison(t *testing.T) {
 	result := normalizePathForComparison("/Users/Test/File.go")
 	if result != strings.ToLower("/users/test/file.go") &&

@@ -84,35 +84,6 @@ func TestConcurrentAppendReadNoRace(t *testing.T) {
 	}
 }
 
-// TestSanitizePath 验证路径→目录名映射、超长截断+hash、确定性。
-func TestSanitizePath(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"/a b/c", "-a-b-c"},
-		{"/Users/foo/my-project", "-Users-foo-my-project"},
-		{"plain", "plain"},
-		{"/", "-"},
-		{"~/.tinyclue/projects", "---tinyclue-projects"},
-	}
-	for _, c := range cases {
-		if got := sanitizePath(c.in); got != c.want {
-			t.Errorf("sanitizePath(%q) = %q, want %q", c.in, got, c.want)
-		}
-	}
-
-	// 超长路径：截断 + hash 尾巴，且确定性。
-	long := "/" + strings.Repeat("abc", 100) // 301 字符
-	got := sanitizePath(long)
-	if len(got) > maxSanitizedLength+40 {
-		t.Errorf("sanitizePath long result too long: %d", len(got))
-	}
-	if sanitizePath(long) != got {
-		t.Error("sanitizePath long result not deterministic")
-	}
-	if !strings.HasPrefix(got, "-") || !strings.Contains(got, "-") {
-		t.Errorf("sanitizePath long result unexpected: %q", got)
-	}
-}
-
 // TestInitLatestProjectScoped 验证 InitLatest 优先当前项目目录内最近会话，
 // 不选别的项目目录里更新但项目不匹配的文件。
 func TestInitLatestProjectScoped(t *testing.T) {
