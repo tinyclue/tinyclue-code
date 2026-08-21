@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -11,7 +12,8 @@ import (
 var CLI CLIFlags
 
 func init() {
-	CLI.Cwd, _ = os.Getwd()
+	cwd, _ := os.Getwd()
+	CLI.Cwd = canonicalizeDir(cwd)
 	CLI.Parse(os.Args[1:])
 }
 
@@ -103,4 +105,14 @@ func (f *CLIFlags) Get(key string) (value string, ok bool) {
 	}
 	v, ok := f.flags[key]
 	return v, ok
+}
+
+// canonicalizeDir realpath 归一化（EvalSymlinks），失败回退原值。
+// 避免 symlink 进入同一目录却产生两个项目目录（如 macOS /tmp 与 /private/tmp）。
+func canonicalizeDir(dir string) string {
+	dir = filepath.Clean(dir) // 先消除 . ..
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		return resolved
+	}
+	return dir
 }

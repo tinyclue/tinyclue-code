@@ -28,6 +28,7 @@ type Agent struct {
 	agentTool        *AgentTool
 	tools            []core_types.AgentToolApi
 	agentDef         *core_types.BaseAgentDefinition
+	agentMemory      *AgentMemory
 	agentContext     *AgentContext
 	agentAttachment  *AgentAttachment
 	eventSink        core_types.EventSink
@@ -59,6 +60,7 @@ func NewAgent(ctx context.Context, agentType core_types.AgentType, subAgent bool
 	planManager := plan.NewPlanManager(ctx, runtimeCtx)
 	agentTool := NewAgentTool(ctx, runtimeCtx)
 	agentAttachment := NewAgentAttachment(ctx, runtimeCtx).WithPlanManager(planManager)
+	agentMemory := NewAgentMemory(ctx, runtimeCtx)
 	agentContext := NewAgentContext(ctx, runtimeCtx).WithAgentTool(agentTool).WithAgentDef(agentDef)
 	// plan mode 状态写盘：Enter/ExitPlan 变更后落一条 PlanEntry 到会话（resume 时恢复）。
 	planManager.SetPersistFn(func(ps core_types.PlanState) {
@@ -83,6 +85,7 @@ func NewAgent(ctx context.Context, agentType core_types.AgentType, subAgent bool
 		subAgent:         subAgent,
 		agentLoop:        agentLoop,
 		agentTool:        agentTool,
+		agentMemory:      agentMemory,
 		agentContext:     agentContext,
 		agentAttachment:  agentAttachment,
 		runtimeCtx:       runtimeCtx,
@@ -116,6 +119,7 @@ func (agent *Agent) GetAgentTool() *AgentTool {
 
 func (agent *Agent) Init() *Agent {
 	agent.agentTool.InitWithTools(agent.tools, agent.agentDef.DisallowedTools)
+	agent.agentMemory.Init()
 	agent.agentContext.Init()
 	agent.agentContext.RebuildMessage()
 	agent.agentAttachment.Init()

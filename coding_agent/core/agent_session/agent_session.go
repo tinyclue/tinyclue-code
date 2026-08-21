@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tinyclue/tinyclue-code/api_provider/types"
 	core_types "github.com/tinyclue/tinyclue-code/coding_agent/core/types"
+	"github.com/tinyclue/tinyclue-code/coding_agent/core/utils"
 	"github.com/tinyclue/tinyclue-code/config"
 	"hash/fnv"
 	"os"
@@ -23,7 +24,6 @@ type AgentSession struct {
 	sessionId   string
 	sessionFile string       // jsonl file path
 	file        *sessionFile // file handle for appending
-	projectsDir string       // <base>/projects/，所有项目目录的根
 	sessionDir  string       // <base>/projects/<sanitized-cwd>/{,sub/}，当前项目的会话目录
 	cwd         string       // working dir（已 canonicalize）
 	entrys      []core_types.SessionEntry
@@ -394,10 +394,9 @@ func (as *AgentSession) Init() {
 func (as *AgentSession) initDir() {
 	// config.TinyClueDir 已兜底：$TINYCLUE_CONFIG_DIR 或 ~/.tinyclue。
 	base, _ := config.TinyClueDir()
-	as.projectsDir = filepath.Join(base, "projects")
 	// 用启动时捕获的 config.CLI.Cwd（与欢迎页一致），不重复调用 os.Getwd。
-	as.cwd = canonicalizeDir(config.CLI.Cwd)
-	as.sessionDir = filepath.Join(as.projectsDir, sanitizePath(as.cwd))
+	as.cwd = config.CLI.Cwd
+	as.sessionDir = utils.GetHomeProjectsPath(base, as.cwd)
 	os.MkdirAll(as.sessionDir, 0755)
 }
 
@@ -424,15 +423,6 @@ func sanitizePath(s string) string {
 	h := fnv.New64a()
 	h.Write([]byte(s))
 	return out[:maxSanitizedLength] + "-" + strconv.FormatUint(h.Sum64(), 16)
-}
-
-// canonicalizeDir realpath 归一化（EvalSymlinks），失败回退原值。
-// 避免 symlink 进入同一目录却产生两个项目目录（如 macOS /tmp 与 /private/tmp）。
-func canonicalizeDir(dir string) string {
-	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
-		return resolved
-	}
-	return dir
 }
 
 // InitLatest 恢复会话：恢复当前项目目录（projects/<sanitized-cwd>）内最近会话；
@@ -536,10 +526,12 @@ func (as *AgentSession) nextSequence() int {
 }
 
 // loadSession 按 sessionId 恢复会话：sessionId 全局唯一，跨所有项目目录查找
-// （projects/*/*_{id}.jsonl，glob 不穿透 sub/ 子目录，子 agent 会话不参与）。
+// （projects/<sanitized-cwd>/*_{id}.jsonl，glob 不穿透 sub/ 子目录，子 agent 会话不参与）。
 // 无匹配（-c <badId>）时回退创建新会话，避免留下空 session（无 header/无文件句柄）。
 func (as *AgentSession) loadSession(sessionId string) {
-	pattern := filepath.Join(as.projectsDir, "*", fmt.Sprintf("*_%s.jsonl", sessionId))
+	// projectsDir = filepath.Dir(as.sessionDir)，即 <base>/projects/，
+	// sessionId 全局唯一，跨所有项目目录查找（glob 不穿透 sub/ 子目录）。
+	pattern := filepath.Join(filepath.Dir(as.sessionDir), "*", fmt.Sprintf("*_%s.jsonl", sessionId))
 	matches, _ := filepath.Glob(pattern)
 	if len(matches) == 0 {
 		as.createSession()

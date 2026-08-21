@@ -1,6 +1,7 @@
 package usercontext
 
 import (
+	"github.com/tinyclue/tinyclue-code/coding_agent/core/utils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -289,14 +290,14 @@ func TestRemoveInlineCodeSpans(t *testing.T) {
 // --- Path utilities ---
 
 func TestSanitizePath_Simple(t *testing.T) {
-	result := sanitizePath("hello")
+	result := utils.SanitizePath("hello")
 	if result != "hello" {
 		t.Fatalf("unexpected: %s", result)
 	}
 }
 
 func TestSanitizePath_ReplaceNonAlpha(t *testing.T) {
-	result := sanitizePath("hello/world/test")
+	result := utils.SanitizePath("hello/world/test")
 	if result != "hello-world-test" {
 		t.Fatalf("unexpected: %s", result)
 	}
@@ -304,11 +305,12 @@ func TestSanitizePath_ReplaceNonAlpha(t *testing.T) {
 
 func TestSanitizePath_Long(t *testing.T) {
 	long := strings.Repeat("a", 300)
-	result := sanitizePath(long)
-	if len(result) > maxSanitizedLength+10 {
+	result := utils.SanitizePath(long)
+	// SanitizePath 截断到 200 字符 + "-" + 8 位 hash（约 209 字符）。
+	if len(result) > 210 {
 		t.Fatalf("too long: %d", len(result))
 	}
-	if !strings.HasPrefix(result, long[:maxSanitizedLength]) {
+	if !strings.HasPrefix(result, long[:200]) {
 		t.Fatal("should start with prefix")
 	}
 }
@@ -944,7 +946,7 @@ func TestExpandPath_Tilde(t *testing.T) {
 
 func TestGetAutoMemPath_Default(t *testing.T) {
 	homeDir, _ := os.UserHomeDir()
-	path := getAutoMemPath(homeDir, "/tmp")
+	path := GetAutoMemPath(homeDir, "/tmp")
 	if path == "" {
 		t.Fatal("should produce a path")
 	}

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tinyclue/tinyclue-code/config"
 	"github.com/tinyclue/tinyclue-code/oauth"
 )
 
@@ -26,7 +27,13 @@ func newMCPTestHome(t *testing.T) string {
 		t.Fatal(err)
 	}
 	t.Setenv("TINYCLUE_CONFIG_DIR", home)
-	t.Chdir(t.TempDir())
+	tmp := t.TempDir()
+	t.Chdir(tmp)
+	// 配置加载用 config.CLI.Cwd（进程启动时捕获一次，t.Chdir 不更新它）。
+	// 把它指向隔离的临时目录，避免项目级 .mcp.json 发现到仓库根的真实配置。
+	origCwd := config.CLI.Cwd
+	config.CLI.Cwd = tmp
+	t.Cleanup(func() { config.CLI.Cwd = origCwd })
 	return home
 }
 

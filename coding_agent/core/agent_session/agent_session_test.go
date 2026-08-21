@@ -122,7 +122,7 @@ func TestInitLatestProjectScoped(t *testing.T) {
 	matching := writeSessionFile(t, as.sessionDir, "sess-local", 1)
 	os.Chtimes(matching, now.Add(-2*time.Hour), now.Add(-2*time.Hour))
 
-	otherDir := filepath.Join(as.projectsDir, "-some-other-project")
+	otherDir := filepath.Join(filepath.Dir(as.sessionDir), "-some-other-project")
 	os.MkdirAll(otherDir, 0755)
 	other := writeSessionFile(t, otherDir, "sess-other", 1)
 	os.Chtimes(other, now, now)
@@ -139,7 +139,7 @@ func TestInitLatestEmptyProjectCreates(t *testing.T) {
 	as := newTestSession(t)
 
 	// 别的项目有会话，当前项目没有。
-	otherDir := filepath.Join(as.projectsDir, "-some-other-project")
+	otherDir := filepath.Join(filepath.Dir(as.sessionDir), "-some-other-project")
 	os.MkdirAll(otherDir, 0755)
 	writeSessionFile(t, otherDir, "sess-other", 1)
 
@@ -176,7 +176,7 @@ func TestLoadSessionBadIdFallsBack(t *testing.T) {
 // TestLoadSessionAcrossProjects 验证 -c <id> 能跨项目目录按 id 找到会话。
 func TestLoadSessionAcrossProjects(t *testing.T) {
 	as := newTestSession(t)
-	otherDir := filepath.Join(as.projectsDir, "-other-project")
+	otherDir := filepath.Join(filepath.Dir(as.sessionDir), "-other-project")
 	os.MkdirAll(otherDir, 0755)
 	writeSessionFile(t, otherDir, "sess-target", 1)
 
@@ -190,7 +190,7 @@ func TestLoadSessionAcrossProjects(t *testing.T) {
 func TestSequencePerProjectDir(t *testing.T) {
 	as := newTestSession(t)
 
-	otherDir := filepath.Join(as.projectsDir, "-other-project")
+	otherDir := filepath.Join(filepath.Dir(as.sessionDir), "-other-project")
 	os.MkdirAll(otherDir, 0755)
 	writeSessionFile(t, otherDir, "sess-a", 5) // 别的项目已有 seq=5
 
@@ -219,7 +219,6 @@ func TestPlanEntryPersistRestore(t *testing.T) {
 
 	// 重读文件，验证条目类型与内容完整落盘。
 	reloaded := NewAgentSession(context.Background(), &core_types.AgentRuntimeContext{SessionId: "test"})
-	reloaded.projectsDir = as.projectsDir
 	reloaded.sessionDir = as.sessionDir
 	reloaded.cwd = as.cwd
 	reloaded.loadSessionFile(as.GetSessionFile())

@@ -23,7 +23,6 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"sync"
 	"time"
@@ -150,9 +149,8 @@ func (m *Manager) reset(ctx context.Context) {
 
 // loadConfig 解析 MCP 配置（用户级 + 项目级 .mcp.json）；解析失败仅记日志，返回可用部分。
 func (m *Manager) loadConfig() *config.MCPConfig {
-	cwd, err := os.Getwd()
-	if err != nil {
-		log.Warnf(m.ctx, "mcp: get cwd: %v", err)
+	cwd := config.CLI.Cwd
+	if cwd == "" {
 		cwd = "."
 	}
 	cfg, cfgErr := config.LoadMCPConfig(cwd)

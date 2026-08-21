@@ -39,11 +39,7 @@ func ProjectRoot() string {
 		return override
 	}
 	projectRootOnce.Do(func() {
-		cwd, err := os.Getwd()
-		if err != nil {
-			projectRootVal = ""
-			return
-		}
+		cwd := CLI.Cwd
 		dir := cwd
 		for {
 			if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {

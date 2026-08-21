@@ -2,6 +2,8 @@ package usercontext
 
 import (
 	"fmt"
+	"github.com/tinyclue/tinyclue-code/coding_agent/core/utils"
+	"github.com/tinyclue/tinyclue-code/config"
 	"os"
 	"path/filepath"
 	"sort"
@@ -183,8 +185,8 @@ func getMemoryFiles(cfg Config) ([]MemoryFileInfo, error) {
 	}
 
 	// Nested worktree detection (TS: findGitRoot vs findCanonicalGitRoot)
-	gitRoot := findGitRoot(cwd)
-	canonicalRoot := findCanonicalGitRoot(cwd)
+	gitRoot := utils.FindGitRoot(cwd)
+	canonicalRoot := utils.FindCanonicalGitRoot(cwd)
 	isNestedWorktree := gitRoot != "" && canonicalRoot != "" &&
 		normalizePathForComparison(gitRoot) != normalizePathForComparison(canonicalRoot) &&
 		pathInWorkingPath(gitRoot, canonicalRoot)
@@ -552,7 +554,7 @@ func processConditionedMdRules(targetPath, rulesDir string, memType MemoryType, 
 			baseDir = filepath.Dir(filepath.Dir(rulesDir))
 		} else {
 			// Use current directory
-			baseDir, _ = os.Getwd()
+			baseDir = config.CLI.Cwd
 		}
 
 		if matchGlob(targetPath, baseDir, rule.Globs) {
@@ -730,10 +732,7 @@ type ExternalTinyclueMdInclude struct {
 // getExternalTinyclueMdIncludes returns files that are external includes.
 // Mirrors TS getExternalTinyclueMdIncludes() — checks if included file is outside the original CWD.
 func getExternalTinyclueMdIncludes(files []MemoryFileInfo) []ExternalTinyclueMdInclude {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil
-	}
+	cwd := config.CLI.Cwd
 	var result []ExternalTinyclueMdInclude
 	for _, f := range files {
 		if f.Type != MemoryTypeUser && f.Parent != "" && !pathInWorkingPath(f.Path, cwd) {

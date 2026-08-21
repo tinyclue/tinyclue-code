@@ -1,35 +1,14 @@
 package usercontext
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
+	"github.com/tinyclue/tinyclue-code/coding_agent/core/utils"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
 // --- Path utilities ---
-
-const maxSanitizedLength = 200
-
-// sanitizePath sanitizes a path component for use as a directory name.
-// Mirrors TS sanitizePath() in sessionStoragePortable.ts.
-func sanitizePath(name string) string {
-	re := regexp.MustCompile(`[^a-zA-Z0-9]`)
-	sanitized := re.ReplaceAllString(name, "-")
-	if len(sanitized) <= maxSanitizedLength {
-		return sanitized
-	}
-	hash := simpleHash(name)
-	return sanitized[:maxSanitizedLength] + "-" + hash
-}
-
-func simpleHash(name string) string {
-	h := md5.Sum([]byte(name))
-	return hex.EncodeToString(h[:])[:8]
-}
 
 // normalizePathForComparison normalizes a path for comparison.
 // Mirrors TS normalizePathForComparison() in file.ts.
@@ -76,123 +55,6 @@ func normalizeMacOSSymlinks(p string) string {
 	return p
 }
 
-// --- Git root detection ---
-
-// findGitRoot walks up from startPath looking for a .git directory/file.
-// Mirrors TS findGitRoot().
-func findGitRoot(startPath string) string {
-	current, err := filepath.Abs(startPath)
-	if err != nil {
-		return ""
-	}
-
-	volumeName := filepath.VolumeName(current)
-	root := volumeName + string(filepath.Separator)
-
-	for {
-		gitPath := filepath.Join(current, ".git")
-		if info, err := os.Stat(gitPath); err == nil {
-			if info.IsDir() || info.Mode().IsRegular() {
-				return filepath.Clean(current)
-			}
-		}
-
-		parent := filepath.Dir(current)
-		if parent == current {
-			break
-		}
-		current = parent
-		if current == root {
-			break
-		}
-	}
-
-	// Check root too
-	gitPath := filepath.Join(root, ".git")
-	if info, err := os.Stat(gitPath); err == nil {
-		if info.IsDir() || info.Mode().IsRegular() {
-			return filepath.Clean(root)
-		}
-	}
-
-	return ""
-}
-
-// findCanonicalGitRoot resolves a git root through worktrees to the main repo root.
-// Mirrors TS findCanonicalGitRoot().
-func findCanonicalGitRoot(startPath string) string {
-	gitRoot := findGitRoot(startPath)
-	if gitRoot == "" {
-		return ""
-	}
-
-	// In a worktree, .git is a file containing "gitdir: <path>"
-	gitDotFile := filepath.Join(gitRoot, ".git")
-	info, err := os.Stat(gitDotFile)
-	if err != nil || !info.Mode().IsRegular() {
-		return gitRoot
-	}
-
-	data, err := os.ReadFile(gitDotFile)
-	if err != nil {
-		return gitRoot
-	}
-	content := strings.TrimSpace(string(data))
-	if !strings.HasPrefix(content, "gitdir:") {
-		return gitRoot
-	}
-
-	worktreeGitDir := filepath.Clean(strings.TrimSpace(content[len("gitdir:"):]))
-
-	// Read commondir
-	commondirData, err := os.ReadFile(filepath.Join(worktreeGitDir, "commondir"))
-	if err != nil {
-		return gitRoot
-	}
-	commonDir := filepath.Clean(filepath.Join(worktreeGitDir, strings.TrimSpace(string(commondirData))))
-
-	// SECURITY: validate the worktree structure (same as TS)
-	if filepath.Dir(worktreeGitDir) != filepath.Join(commonDir, "worktrees") {
-		return gitRoot
-	}
-
-	// Check backlink
-	gitdirData, err := os.ReadFile(filepath.Join(worktreeGitDir, "gitdir"))
-	if err != nil {
-		return gitRoot
-	}
-	backlink := filepath.Clean(strings.TrimSpace(string(gitdirData)))
-	expectedBacklink := filepath.Join(gitRoot, ".git")
-	if backlink != expectedBacklink {
-		return gitRoot
-	}
-
-	// Bare-repo worktrees: common dir isn't inside a working directory
-	if filepath.Base(commonDir) != ".git" {
-		return commonDir
-	}
-	return filepath.Dir(commonDir)
-}
-
-// --- Tinyclue config home directory ---
-
-// GetTinyclueConfigHomeDir returns the Tinyclue configuration home directory.
-// Mirrors TS getTinyclueConfigHomeDir() in envUtils.ts.
-//
-// Resolution order:
-//  1. TINYCLUE_CONFIG_DIR env var
-//  2. $HOME/.tinyclue (default)
-func GetTinyclueConfigHomeDir() string {
-	if envDir := os.Getenv("TINYCLUE_CONFIG_DIR"); envDir != "" {
-		return envDir
-	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(homeDir, ".tinyclue")
-}
-
 // --- AutoMem path computation ---
 
 // autoMemConstants mirrors the TS constants.
@@ -210,26 +72,9 @@ const (
 // Computed default path:
 //
 //	<tinyclueHomeDir>/projects/<sanitized-git-or-cwd>/memory/
-func getAutoMemPath(tinyclueHomeDir, cwd string) string {
-
-	// Default: <tinyclueHomeDir>/projects/<sanitized-path>/memory/
-	projectsDir := filepath.Join(tinyclueHomeDir, "projects")
-
-	// Try canonical git root first (all worktrees share memory)
-	var basePath string
-	if cwd == "" {
-		cwd, _ = os.Getwd()
-	}
-
-	if gitRoot := findCanonicalGitRoot(cwd); gitRoot != "" {
-		basePath = gitRoot
-	} else {
-		basePath = cwd
-	}
-
-	sanitized := sanitizePath(basePath)
-	autoMemDir := filepath.Join(projectsDir, sanitized, autoMemDirname)
-
+func GetAutoMemPath(tinyclueHomeDir, cwd string) string {
+	projectsPath := utils.GetHomeProjectsPath(tinyclueHomeDir, cwd)
+	autoMemDir := filepath.Join(projectsPath, autoMemDirname)
 	// Add trailing separator for compatibility with path prefix checks
 	return autoMemDir + string(filepath.Separator)
 }
@@ -237,7 +82,7 @@ func getAutoMemPath(tinyclueHomeDir, cwd string) string {
 // getAutoMemEntrypoint returns the MEMORY.md path inside the auto-memory dir.
 // Mirrors TS getAutoMemEntrypoint().
 func GetAutoMemEntrypoint(tinyclueHomeDir, cwd string) string {
-	return filepath.Join(getAutoMemPath(tinyclueHomeDir, cwd), autoMemEntrypointName)
+	return filepath.Join(GetAutoMemPath(tinyclueHomeDir, cwd), autoMemEntrypointName)
 }
 
 // getTeamMemEntrypoint returns the team memory MEMORY.md path.
@@ -245,7 +90,7 @@ func GetAutoMemEntrypoint(tinyclueHomeDir, cwd string) string {
 //
 // Default path: <tinyclueHomeDir>/projects/<sanitized-project>/memory/team/MEMORY.md
 func getTeamMemEntrypoint(tinyclueHomeDir, cwd string) string {
-	return filepath.Join(getAutoMemPath(tinyclueHomeDir, cwd), "team", autoMemEntrypointName)
+	return filepath.Join(GetAutoMemPath(tinyclueHomeDir, cwd), "team", autoMemEntrypointName)
 }
 
 // validateMemoryPath checks a candidate auto-memory path for safety.

@@ -10,6 +10,7 @@ package usercontext
 
 import (
 	"fmt"
+	"github.com/tinyclue/tinyclue-code/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,17 +110,14 @@ func GetDefaultConfig() Config {
 	if err != nil {
 		homeDir = ""
 	}
-	cwd, err2 := os.Getwd()
-	if err2 != nil {
-		cwd = ""
-	}
+	cwd := config.CLI.Cwd
 
-	tinyclueHome := GetTinyclueConfigHomeDir()
+	tinyclueHome, _ := config.TinyClueDir()
 
 	cfg := Config{
 		Disabled:                   false,
 		HomeDir:                    homeDir,
-		TinyclueHomeDir:            GetTinyclueConfigHomeDir(),
+		TinyclueHomeDir:            tinyclueHome,
 		CWD:                        cwd,
 		TinyclueMdExternalIncludes: false,
 
@@ -168,7 +166,8 @@ func (cfg Config) getTinyclueHomeDir() string {
 	if cfg.TinyclueHomeDir != "" {
 		return cfg.TinyclueHomeDir
 	}
-	return GetTinyclueConfigHomeDir()
+	dir, _ := config.TinyClueDir()
+	return dir
 }
 
 // GetUserContext 收集所有 TINYCLUE.md 及记忆文件，返回合并后的用户上下文。
