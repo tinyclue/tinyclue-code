@@ -11,6 +11,7 @@ import (
 	"github.com/tinyclue/tinyclue-code/config"
 	"github.com/tinyclue/tinyclue-code/mcp"
 	"github.com/tinyclue/tinyclue-code/subscription"
+	"github.com/tinyclue/tinyclue-code/tui/component/configpanel"
 	"github.com/tinyclue/tinyclue-code/tui/component/loginpanel"
 	"github.com/tinyclue/tinyclue-code/tui/component/mcppanel"
 	"github.com/tinyclue/tinyclue-code/tui/component/modelpanel"
@@ -30,6 +31,10 @@ func (ia *Interactive) OnSubmit(text string) {
 	}
 	if text == "/mcp" {
 		ia.handleMcp()
+		return
+	}
+	if text == "/config" {
+		ia.handleConfig()
 		return
 	}
 	if text == "/exit" {
@@ -214,19 +219,39 @@ func mcpActionResult(server string, action mcp.Action, err error) string {
 func (ia *Interactive) handleModel() {
 	modelComp := modelpanel.New()
 	modelComp.OnSubmit(func(provider, modelID, reasoningEffort string) {
-		_ = config.Cnf.SetReasoningEffort(reasoningEffort)
-		if err := config.Cnf.SetDefaults(provider, modelID); err != nil {
+		if err := config.Cnf.SetSettings(map[string]any{
+			"default_provider": provider,
+			"default_model":    modelID,
+			"reasoning_effort": reasoningEffort,
+		}); err != nil {
 			ia.closePanel("Failed to save model: " + err.Error())
-		} else {
-			if err := config.Cnf.Reload(); err != nil {
-				ia.closePanel("Model saved but reload failed: " + err.Error())
-			} else {
-				ia.closePanel("Model set to " + modelID + " (" + provider + ")")
-			}
+			return
 		}
+		ia.closePanel("Model set to " + modelID + " (" + provider + ")")
 	})
 	modelComp.OnCancel(func() {
 		ia.closePanel("Model selection cancelled")
 	})
 	ia.showPanel("/model", modelComp)
+}
+
+// ── Config Panel ──
+
+// handleConfig 打开 /config 配置面板。
+// 面板按 config.Cnf.ListSettings() 自动构建行（当前仅 AutoMemory），
+// 提交时回传被改动的 key→value，此处经 config.Cnf.SetSetting 统一落盘。
+func (ia *Interactive) handleConfig() {
+	comp := configpanel.New()
+	comp.OnSubmit(func(changed map[string]any) {
+		// 一次性批量校验 + 写入，settings.json 只落盘一次（SetSettings 内部保证）。
+		if err := config.Cnf.SetSettings(changed); err != nil {
+			ia.closePanel("Failed to save config: " + err.Error())
+			return
+		}
+		ia.closePanel("Config updated")
+	})
+	comp.OnCancel(func() {
+		ia.closePanel("")
+	})
+	ia.showPanel("/config", comp)
 }

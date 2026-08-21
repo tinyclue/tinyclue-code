@@ -13,6 +13,7 @@ var defaultItems = []selectlist.Item{
 	{Value: "/login", Label: "login", Desc: "Configure provider authentication"},
 	{Value: "/model", Label: "model", Desc: "Select model"},
 	{Value: "/mcp", Label: "mcp", Desc: "Manage MCP servers"},
+	{Value: "/config", Label: "config", Desc: "Configure settings"},
 	{Value: "/exit", Label: "exit", Desc: "Exit the application"},
 }
 

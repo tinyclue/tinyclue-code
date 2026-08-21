@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 )
 
@@ -53,66 +52,67 @@ func getTinyclueMds(files []MemoryFileInfo) string {
 	return memoryInstructionPrompt + "\n\n" + strings.Join(memories, "\n\n")
 }
 
-// mergeTinyclueMds combines all discovered TINYCLUE.md files into a single string,
-// matching the TS format from getTinyclueMds() in src/utils/tinycluemd.ts.
-// This is the legacy format used by the original Go implementation.
-// Callers should prefer getTinyclueMds() for full TS compatibility.
-func mergeTinyclueMds(files []MemoryFileInfo, _ Config) string {
-	if len(files) == 0 {
-		return ""
-	}
-
-	// Group by type, preserving order
-	type entry struct {
-		typ  MemoryType
-		file MemoryFileInfo
-	}
-
-	var entries []entry
-	for _, f := range files {
-		entries = append(entries, entry{typ: f.Type, file: f})
-	}
-
-	// Sort by priority (same as TS priority order)
-	sort.Slice(entries, func(i, j int) bool {
-		return typePriority(entries[i].typ) < typePriority(entries[j].typ)
-	})
-
-	var parts []string
-	for _, e := range entries {
-		data, err := os.ReadFile(e.file.Path)
-		if err != nil {
-			continue
-		}
-		content := strings.TrimSpace(string(data))
-		if content == "" {
-			continue
-		}
-
-		var description string
-		switch e.typ {
-		case MemoryTypeProject:
-			description = " (project instructions, checked into the codebase)"
-		case MemoryTypeLocal:
-			description = " (user's private project instructions, not checked in)"
-		case MemoryTypeAutoMem:
-			description = " (user's auto-memory, persists across conversations)"
-		default:
-			description = " (user's private global instructions for all projects)"
-		}
-
-		// TS output format:
-		// Contents of <path><description>:\n\n<content>
-		entry := fmt.Sprintf("Contents of %s%s:\n\n%s", e.file.Path, description, content)
-		parts = append(parts, entry)
-	}
-
-	if len(parts) == 0 {
-		return ""
-	}
-
-	return memoryInstructionPrompt + "\n\n" + strings.Join(parts, "\n\n")
-}
+//
+//// mergeTinyclueMds combines all discovered TINYCLUE.md files into a single string,
+//// matching the TS format from getTinyclueMds() in src/utils/tinycluemd.ts.
+//// This is the legacy format used by the original Go implementation.
+//// Callers should prefer getTinyclueMds() for full TS compatibility.
+//func mergeTinyclueMds(files []MemoryFileInfo, _ Config) string {
+//	if len(files) == 0 {
+//		return ""
+//	}
+//
+//	// Group by type, preserving order
+//	type entry struct {
+//		typ  MemoryType
+//		file MemoryFileInfo
+//	}
+//
+//	var entries []entry
+//	for _, f := range files {
+//		entries = append(entries, entry{typ: f.Type, file: f})
+//	}
+//
+//	// Sort by priority (same as TS priority order)
+//	sort.Slice(entries, func(i, j int) bool {
+//		return typePriority(entries[i].typ) < typePriority(entries[j].typ)
+//	})
+//
+//	var parts []string
+//	for _, e := range entries {
+//		data, err := os.ReadFile(e.file.Path)
+//		if err != nil {
+//			continue
+//		}
+//		content := strings.TrimSpace(string(data))
+//		if content == "" {
+//			continue
+//		}
+//
+//		var description string
+//		switch e.typ {
+//		case MemoryTypeProject:
+//			description = " (project instructions, checked into the codebase)"
+//		case MemoryTypeLocal:
+//			description = " (user's private project instructions, not checked in)"
+//		case MemoryTypeAutoMem:
+//			description = " (user's auto-memory, persists across conversations)"
+//		default:
+//			description = " (user's private global instructions for all projects)"
+//		}
+//
+//		// TS output format:
+//		// Contents of <path><description>:\n\n<content>
+//		entry := fmt.Sprintf("Contents of %s%s:\n\n%s", e.file.Path, description, content)
+//		parts = append(parts, entry)
+//	}
+//
+//	if len(parts) == 0 {
+//		return ""
+//	}
+//
+//	return memoryInstructionPrompt + "\n\n" + strings.Join(parts, "\n\n")
+//}
 
 // typePriority returns the priority order for memory types (lower = loaded first = lower priority).
 func typePriority(t MemoryType) int {

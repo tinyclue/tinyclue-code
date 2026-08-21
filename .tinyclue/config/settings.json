@@ -1,4 +1,5 @@
 {
-  "defaultProvider": "opencode",
-  "defaultModel": "deepseek-v4-flash-free"
+  "default_provider": "opencode",
+  "default_model": "deepseek-v4-flash-free",
+  "auto_memory": true
 }

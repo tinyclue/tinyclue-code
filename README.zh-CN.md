@@ -124,15 +124,15 @@ tinyclue -c <id>      # 按 session id 恢复指定会话
 
 ```json
 {
-  "defaultProvider": "opencode",
-  "defaultModel": "deepseek-v4-flash-free",
+  "default_provider": "opencode",
+  "default_model": "deepseek-v4-flash-free",
   "reasoning_effort": "high",
   "language": "",
-  "autoMemory": false
+  "auto_memory": false
 }
 ```
 
-- `defaultProvider` / `defaultModel` — 当前生效的厂商与模型。
+- `default_provider` / `default_model` — 当前生效的厂商与模型。
 - `reasoning_effort` — 推理级别：`low` / `medium` / `high` / `max`（默认 `high`）。
 - `language` — 偏好回复语言。
 - `autoMemory` — 是否启用跨会话自动记忆系统。

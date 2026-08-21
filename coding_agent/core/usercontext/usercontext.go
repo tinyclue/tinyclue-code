@@ -223,7 +223,7 @@ func (cfg Config) getTinyclueHomeDir() string {
 func GetUserContext(cfg Config) (*UserContext, error) {
 	var tinyclueMd string
 
-	// 全局禁用逃生舱
+	// 全局禁用
 	if !cfg.Disabled {
 		files, err := getMemoryFiles(cfg)
 		if err != nil {
@@ -258,14 +258,6 @@ func PrependUserContext(ctx *UserContext) string {
 		return ""
 	}
 
-	// TS format from prependUserContext() in api.ts:
-	// <system-reminder>
-	// As you answer the user's questions, you can use the following context:
-	// # key
-	// value
-	//
-	// IMPORTANT: this context may or may not be relevant...
-	// </system-reminder>
 	return "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n" +
 		strings.Join(entries, "\n") +
 		"\n\nIMPORTANT: this context may or may not be relevant to your tasks. You should not respond to this context unless it is highly relevant to your task.\n</system-reminder>"

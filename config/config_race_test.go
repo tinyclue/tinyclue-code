@@ -6,7 +6,7 @@ import (
 )
 
 // TestConfigConcurrentAccessNoRace 并发读（DefaultProvider/AuthFor/...）与写
-// （Reload/SetAuth/SetDefaults/...）访问同一 Config，验证热更新路径无数据竞争
+// （Reload/SetAuth/SetSettings/...）访问同一 Config，验证热更新路径无数据竞争
 // （配合 go test -race 生效）。
 func TestConfigConcurrentAccessNoRace(t *testing.T) {
 	c := &Config{dir: t.TempDir()}
@@ -16,7 +16,7 @@ func TestConfigConcurrentAccessNoRace(t *testing.T) {
 
 	var wg sync.WaitGroup
 	const n = 50
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
@@ -37,11 +37,11 @@ func TestConfigConcurrentAccessNoRace(t *testing.T) {
 			if err := c.SetAuth("anthropic", &AuthEntry{Type: "oauth"}); err != nil {
 				t.Errorf("SetAuth: %v", err)
 			}
-			if err := c.SetReasoningEffort("low"); err != nil {
-				t.Errorf("SetReasoningEffort: %v", err)
+			if err := c.SetSettings(map[string]any{"reasoning_effort": "low"}); err != nil {
+				t.Errorf("SetSettings(reasoning_effort): %v", err)
 			}
-			if err := c.SetDefaults("deepseek", "deepseek-chat"); err != nil {
-				t.Errorf("SetDefaults: %v", err)
+			if err := c.SetSettings(map[string]any{"default_provider": "deepseek", "default_model": "deepseek-chat"}); err != nil {
+				t.Errorf("SetSettings(default_provider/model): %v", err)
 			}
 		}()
 	}

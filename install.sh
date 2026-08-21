@@ -64,8 +64,9 @@ if should_write settings.json; then
   [[ -e "$CONFIG_DIR/settings.json" ]] && mv -f "$CONFIG_DIR/settings.json" "$CONFIG_DIR/settings.json.bak"
   cat > "$CONFIG_DIR/settings.json" <<'EOF'
 {
-  "defaultProvider": "opencode",
-  "defaultModel": "deepseek-v4-flash-free"
+  "default_provider": "opencode",
+  "default_model": "deepseek-v4-flash-free",
+  "auto_memory": true
 }
 EOF
 fi

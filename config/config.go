@@ -17,11 +17,11 @@ import (
 
 // Settings 对应 settings.json。
 type Settings struct {
-	DefaultProvider string `json:"defaultProvider"`            // 当前生效的厂商，如 "deepseek"
-	DefaultModel    string `json:"defaultModel"`               // 当前生效的模型名
+	DefaultProvider string `json:"default_provider"`           // 当前生效的厂商，如 "deepseek"
+	DefaultModel    string `json:"default_model"`              // 当前生效的模型名
 	ReasoningEffort string `json:"reasoning_effort,omitempty"` // 推理级别: low/medium/high/max
-	Language        string //@TODO Neo 语言配置
-	AutoMemory      bool
+	Language        string `json:"language,omitempty"`
+	AutoMemory      bool   `json:"auto_memory,omitempty"`
 }
 
 // AuthEntry 某个厂商的授权信息。
@@ -143,14 +143,6 @@ func (c *Config) ReasoningEffort() string {
 	return c.settings.ReasoningEffort
 }
 
-// SetReasoningEffort 设置推理级别并保存到 settings.json。
-func (c *Config) SetReasoningEffort(effort string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.settings.ReasoningEffort = effort
-	return c.saveSettings()
-}
-
 // saveSettings 将当前 settings 写入 settings.json。
 func (c *Config) saveSettings() error {
 	path := filepath.Join(c.dir, "settings.json")
@@ -205,15 +197,6 @@ func (c *Config) ProviderNames() []string {
 	}
 	sort.Strings(names)
 	return names
-}
-
-// SetDefaults 设置默认厂商和模型并保存到 settings.json。
-func (c *Config) SetDefaults(provider, model string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.settings.DefaultProvider = provider
-	c.settings.DefaultModel = model
-	return c.saveSettings()
 }
 
 // SetAuth 设置指定厂商的授权信息并保存到 auth.json。

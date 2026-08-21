@@ -134,18 +134,18 @@ All user configuration lives under `~/.tinyclue/` (override the base directory w
 
 ```json
 {
-  "defaultProvider": "opencode",
-  "defaultModel": "deepseek-v4-flash-free",
+  "default_provider": "opencode",
+  "default_model": "deepseek-v4-flash-free",
   "reasoning_effort": "high",
   "language": "",
-  "autoMemory": false
+  "auto_memory": false
 }
 ```
 
-- `defaultProvider` / `defaultModel` — the active provider and model.
+- `default_provider` / `default_model` — the active provider and model.
 - `reasoning_effort` — reasoning level: `low` / `medium` / `high` / `max` (default `high`).
 - `language` — preferred response language.
-- `autoMemory` — enable the cross-session auto-memory system.
+- `auto_memory` — enable the cross-session auto-memory system.
 
 ### `config/auth.json`
 
